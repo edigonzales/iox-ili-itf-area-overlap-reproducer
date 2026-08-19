@@ -11,7 +11,8 @@ diff --git a/src/main/java/ch/interlis/iom_j/itf/ItfWriter2.java b/src/main/java
 +						double maxOverlap=maxOverlapValue!=null?maxOverlapValue.doubleValue():0.0;
 +						ItfAreaPolygon2Linetable allLines=new ItfAreaPolygon2Linetable(tableQName, recman, maxOverlap);
  						// FORALL main objects
- diff --git a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java b/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
+
+diff --git a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java b/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
 --- a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
 +++ b/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
 @@ -22,3 +22,4 @@
