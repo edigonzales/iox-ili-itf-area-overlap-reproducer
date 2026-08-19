@@ -59,9 +59,10 @@ public class ItfAreaPolygon2LinetableFixed {
         }
     }
 
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     public List<IomObject> getLines() throws IoxException {
         if (ioxlines == null) {
-            CompoundCurveNoder noder = new CompoundCurveNoder(recman, (List<?>) lines, false);
+            CompoundCurveNoder noder = new CompoundCurveNoder(recman, (List) lines, false);
             noder.setEnableCommonSegments(true);
 
             List<Intersection> invalidIntersections = new ArrayList<Intersection>();
@@ -136,7 +137,7 @@ public class ItfAreaPolygon2LinetableFixed {
             }
 
             Double overlap = intersection.getOverlap();
-            return overlap != null && overlap <= maxOverlap;
+            return overlap == null || overlap <= maxOverlap;
         }
 
         return false;
