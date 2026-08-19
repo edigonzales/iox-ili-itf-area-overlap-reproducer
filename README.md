@@ -33,12 +33,12 @@ gradle test
 
 ## Expected result with current iox-ili
 
-The test suite is intentionally **red**:
+The test suite is deliberately **green**, while explicitly asserting the current problematic behavior:
 
-- `arcStraightOverlapIsWithinDmavTolerance` passes and demonstrates that the reported overlap is below `0.002`.
-- `itfAreaWriterShouldAcceptSameLinework` fails because `ItfAreaPolygon2Linetable.getLines()` throws `IoxException: intersections`.
+- `arcStraightOverlapIsWithinDmavTolerance` demonstrates that the reported overlap is below `0.002`.
+- `itfAreaWriterRejectsToleranceValidLinework` demonstrates that `ItfAreaPolygon2Linetable.getLines()` nevertheless throws `IoxException: intersections` for exactly the same linework.
 
-After the underlying issue is fixed, both tests should pass without changing the geometry.
+After the underlying issue is fixed, the second test should be changed to expect a successful `getLines()` call instead of the exception.
 
 ## Why this is interesting
 
