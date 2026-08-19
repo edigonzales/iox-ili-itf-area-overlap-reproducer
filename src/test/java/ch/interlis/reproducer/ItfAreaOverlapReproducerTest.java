@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.Test;
 
@@ -15,6 +16,7 @@ import ch.ehi.iox.objpool.ObjectPoolManager;
 import ch.interlis.iom.IomObject;
 import ch.interlis.iom_j.Iom_jObject;
 import ch.interlis.iom_j.itf.impl.ItfAreaPolygon2Linetable;
+import ch.interlis.iom_j.itf.impl.ItfAreaPolygon2LinetableFixed;
 import ch.interlis.iom_j.itf.impl.jtsext.algorithm.CurveSegmentIntersector;
 import ch.interlis.iom_j.itf.impl.jtsext.geom.ArcSegment;
 import ch.interlis.iom_j.itf.impl.jtsext.geom.StraightSegment;
@@ -40,6 +42,9 @@ public class ItfAreaOverlapReproducerTest {
         assertTrue(intersector.hasIntersection());
         assertEquals(2, intersector.getIntersectionNum());
         assertNotNull(intersector.getOverlap());
+        assertEquals(3.894404398963047E-8, intersector.getOverlap(), 1E-15);
+        assertEquals(2754997.7268392625, intersector.getIntersection(0).x, 1E-10);
+        assertEquals(1260354.8976185862, intersector.getIntersection(0).y, 1E-10);
         assertTrue("overlap should be below DMAV tolerance, but was " + intersector.getOverlap(),
                 intersector.getOverlap() < DMAV_MAX_OVERLAP);
 
@@ -50,26 +55,69 @@ public class ItfAreaOverlapReproducerTest {
     }
 
     @Test
-    public void itfAreaWriterRejectsToleranceValidLinework() throws Exception {
+    public void upstreamItfAreaWriterRejectsToleranceValidLinework() throws Exception {
         ObjectPoolManager objectPoolManager = new ObjectPoolManager();
         try {
-            ItfAreaPolygon2Linetable builder = new ItfAreaPolygon2Linetable("Reproducer.Topic.Area", objectPoolManager);
-
-            ArrayList<IomObject> lines = new ArrayList<IomObject>();
-            lines.add(createArcPolyline());
-            lines.add(createStraightPolyline());
-            builder.addLines("1", null, lines);
+            ItfAreaPolygon2Linetable builder = new ItfAreaPolygon2Linetable(
+                    "Reproducer.Topic.Area", objectPoolManager);
+            builder.addLines("1", null, createProblemLines());
 
             try {
                 builder.getLines();
                 fail("Expected current iox-ili behavior: IoxException: intersections");
             } catch (IoxException e) {
                 assertEquals("intersections", e.getMessage());
-                System.out.println("Reproduced current ITF AREA writer failure: " + e.getMessage());
+                System.out.println("UPSTREAM: rejected tolerance-valid linework: " + e.getMessage());
             }
         } finally {
             objectPoolManager.close();
         }
+    }
+
+    @Test
+    public void fixedItfAreaWriterAcceptsToleranceValidLinework() throws Exception {
+        ObjectPoolManager objectPoolManager = new ObjectPoolManager();
+        try {
+            ItfAreaPolygon2LinetableFixed builder = new ItfAreaPolygon2LinetableFixed(
+                    objectPoolManager, DMAV_MAX_OVERLAP);
+            builder.addLines("1", null, createProblemLines());
+
+            List<IomObject> outputLines = builder.getLines();
+
+            assertNotNull(outputLines);
+            assertEquals(2, outputLines.size());
+            System.out.println("FIXED: accepted same linework with maxOverlap=" + DMAV_MAX_OVERLAP);
+        } finally {
+            objectPoolManager.close();
+        }
+    }
+
+    @Test
+    public void fixedItfAreaWriterStillRejectsOverlapAboveTolerance() throws Exception {
+        ObjectPoolManager objectPoolManager = new ObjectPoolManager();
+        try {
+            double tooSmallTolerance = 1E-9;
+            ItfAreaPolygon2LinetableFixed builder = new ItfAreaPolygon2LinetableFixed(
+                    objectPoolManager, tooSmallTolerance);
+            builder.addLines("1", null, createProblemLines());
+
+            try {
+                builder.getLines();
+                fail("Expected intersection because overlap exceeds configured tolerance");
+            } catch (IoxException e) {
+                assertEquals("intersections", e.getMessage());
+                System.out.println("FIXED: still rejected linework when maxOverlap=" + tooSmallTolerance);
+            }
+        } finally {
+            objectPoolManager.close();
+        }
+    }
+
+    private static ArrayList<IomObject> createProblemLines() {
+        ArrayList<IomObject> lines = new ArrayList<IomObject>();
+        lines.add(createArcPolyline());
+        lines.add(createStraightPolyline());
+        return lines;
     }
 
     private static IomObject createArcPolyline() {
