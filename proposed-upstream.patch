@@ -1,20 +1,28 @@
 diff --git a/src/main/java/ch/interlis/iom_j/itf/ItfWriter2.java b/src/main/java/ch/interlis/iom_j/itf/ItfWriter2.java
 --- a/src/main/java/ch/interlis/iom_j/itf/ItfWriter2.java
 +++ b/src/main/java/ch/interlis/iom_j/itf/ItfWriter2.java
-@@ -1,3 +1,3 @@
-@@
+@@ -236,5 +236,8 @@
+ 						String attrName=attr.getName();
+ 						String lineTableName=tableQName+"_"+attrName;
+ 						EhiLogger.logState("build linetable "+lineTableName+"...");
 -						ItfAreaPolygon2Linetable allLines=new ItfAreaPolygon2Linetable(tableQName, recman);
 +						AreaType areaType=(AreaType)attr.getDomainResolvingAliases();
 +						PrecisionDecimal maxOverlapValue=areaType.getMaxOverlap();
 +						double maxOverlap=maxOverlapValue!=null?maxOverlapValue.doubleValue():0.0;
 +						ItfAreaPolygon2Linetable allLines=new ItfAreaPolygon2Linetable(tableQName, recman, maxOverlap);
  						// FORALL main objects
- 						java.util.Map<String, IomObject> pool=getObjectPool(tableQName);
-
-diff --git a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java b/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
+ diff --git a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java b/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
 --- a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
 +++ b/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
-@@
+@@ -22,3 +22,4 @@
+ import ch.interlis.iom_j.itf.impl.jtsext.geom.CompoundCurve;
+ import ch.interlis.iom_j.itf.impl.jtsext.geom.CurvePolygon;
++import ch.interlis.iom_j.itf.impl.jtsext.geom.CurveSegment;
+ import ch.interlis.iom_j.itf.impl.jtsext.noding.AreaValidator;
+@@ -39,12 +40,19 @@
+ 	private Collection<? extends CompoundCurve> lines=null;
+ 	private List<Polygon> polygons=null;
+ 	private Collection<IomObject> ioxlines=null;
  	private ObjectPoolManager recman=null;
  	private String iliqname=null;
 +	private double maxOverlap=0.0;
@@ -30,9 +38,8 @@ diff --git a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.j
  		iliqname=iliqname1;
 +		maxOverlap=maxOverlap1;
  	}
-@@
- 	public java.util.List<IomObject> getLines() throws IoxException {
- 		if(ioxlines==null){
+ 	public void addLines(String mainObjTid,String internalTid,ArrayList<IomObject> ioxlines) throws IoxException {
+@@ -196,10 +204,16 @@
  			{
  				CompoundCurveNoder noder=new CompoundCurveNoder(recman,(java.util.List)lines,false);
  				noder.setEnableCommonSegments(true);
@@ -51,10 +58,8 @@ diff --git a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.j
  					}
  					throw new IoxException("intersections");
  				}
-@@
- 		return (List<IomObject>) ioxlines;
- 	}
-+
+ 				lines=noder.getNodedSubstrings();
+@@ -225,0 +239,33 @@
 +	/**
 +	 * Same tolerance semantics as AreaValidator.isInvalidProperIntersection().
 +	 */
@@ -88,3 +93,4 @@ diff --git a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.j
 +	private static boolean isControlPoint(Coordinate point,CurveSegment segment){
 +		return point.equals2D(segment.getStartPoint()) || point.equals2D(segment.getEndPoint());
 +	}
++
