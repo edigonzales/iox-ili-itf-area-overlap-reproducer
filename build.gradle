@@ -1,0 +1,23 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    maven {
+        url = uri('https://jars.interlis.ch')
+    }
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'ch.interlis:iox-ili:1.24.4'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+test {
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat = 'full'
+        showStandardStreams = true
+    }
+}
