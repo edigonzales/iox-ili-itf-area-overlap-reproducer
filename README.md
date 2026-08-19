@@ -17,11 +17,10 @@ straight:
 
 The two segments share the point `(2754997.727, 1260354.897)`. `CurveSegmentIntersector` nevertheless finds two intersections and reports an INTERLIS overlap of about `3.8944E-8`. This is far below the DMAV `WITHOUT OVERLAPS > 0.002` tolerance (and also below the DM.01 tolerance of `0.050`).
 
-The reproducer then passes the same two polylines to `ItfAreaPolygon2Linetable`, which is used when an INTERLIS 1 `AREA` is converted to its helper line table. `getLines()` rejects the linework with:
+The reproducer passes the same two polylines to both implementations in the same JVM:
 
-```text
-ch.interlis.iox.IoxException: intersections
-```
+- the unmodified `ItfAreaPolygon2Linetable` from `iox-ili:1.24.4`;
+- `ItfAreaPolygon2LinetableFixed`, a reduced copy of the same code path with the proposed tolerance-aware change.
 
 ## Run
 
@@ -31,15 +30,40 @@ Requires Java and Gradle:
 gradle test
 ```
 
-## Expected result with current iox-ili
+## Expected result
 
-The test suite is deliberately **green**, while explicitly asserting the current problematic behavior:
+The test suite is deliberately **green** while showing the difference between current and proposed behavior:
 
-- `arcStraightOverlapIsWithinDmavTolerance` demonstrates that the reported overlap is below `0.002`.
-- `itfAreaWriterRejectsToleranceValidLinework` demonstrates that `ItfAreaPolygon2Linetable.getLines()` nevertheless throws `IoxException: intersections` for exactly the same linework.
+- `arcStraightOverlapIsWithinDmavTolerance` freezes the exact intersection coordinates and overlap from issue #597.
+- `upstreamItfAreaWriterRejectsToleranceValidLinework` shows that the current writer throws `IoxException: intersections`.
+- `fixedItfAreaWriterAcceptsToleranceValidLinework` shows that the candidate fix accepts exactly the same geometry with `maxOverlap=0.002`.
+- `fixedItfAreaWriterStillRejectsOverlapAboveTolerance` runs the same geometry with `maxOverlap=1E-9` and proves that the candidate fix still rejects it when the configured tolerance is actually exceeded.
 
-After the underlying issue is fixed, the second test should be changed to expect a successful `getLines()` call instead of the exception.
+## Candidate fix
+
+The current `ItfAreaPolygon2Linetable.getLines()` treats every intersection reported by `CompoundCurveNoder` as fatal. The proposed change filters the intersections with the same basic rule already used by the regular `AreaValidator`:
+
+1. a real segment overlay remains invalid;
+2. a single intersection is valid only at a shared segment control point;
+3. with two intersections, if both are shared control points the situation is valid;
+4. if exactly one is a shared control point, the second intersection is valid only when `intersection.getOverlap() <= maxOverlap`;
+5. crossings without a shared control point remain invalid.
+
+This is intentionally narrower than simply ignoring every intersection whose overlap happens to be small.
+
+For a real upstream change, `ItfAreaPolygon2Linetable` would need to receive the AREA type's `maxOverlap`. `ItfWriter2` already has the `AttributeDef attr`, so it can obtain it from the resolved `AreaType`, roughly:
+
+```java
+AreaType areaType = (AreaType) attr.getDomainResolvingAliases();
+PrecisionDecimal maxOverlapValue = areaType.getMaxOverlap();
+double maxOverlap = maxOverlapValue != null ? maxOverlapValue.doubleValue() : 0.0;
+
+ItfAreaPolygon2Linetable allLines =
+        new ItfAreaPolygon2Linetable(tableQName, recman, maxOverlap);
+```
+
+The existing two-argument constructor could remain and delegate with `maxOverlap=0.0` for compatibility.
 
 ## Why this is interesting
 
-The regular area validation path has a `maxOverlap` concept. The INTERLIS 1 line-table construction in `ItfAreaPolygon2Linetable.getLines()` uses `CompoundCurveNoder` and has no `maxOverlap` parameter. The reproducer isolates that difference from ili2db, PostGIS, DMAV-to-DM.01 transformation SQL, and coordinate rounding.
+The regular AREA validation path already has a `maxOverlap` concept. The INTERLIS 1 line-table construction in `ItfAreaPolygon2Linetable.getLines()` currently uses `CompoundCurveNoder` without applying that model tolerance. The reproducer isolates this difference from ili2db, PostGIS, DMAV-to-DM.01 transformation SQL, and coordinate rounding.
