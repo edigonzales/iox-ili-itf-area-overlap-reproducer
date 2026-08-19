@@ -1,0 +1,90 @@
+diff --git a/src/main/java/ch/interlis/iom_j/itf/ItfWriter2.java b/src/main/java/ch/interlis/iom_j/itf/ItfWriter2.java
+--- a/src/main/java/ch/interlis/iom_j/itf/ItfWriter2.java
++++ b/src/main/java/ch/interlis/iom_j/itf/ItfWriter2.java
+@@ -1,3 +1,3 @@
+@@
+-						ItfAreaPolygon2Linetable allLines=new ItfAreaPolygon2Linetable(tableQName, recman);
++						AreaType areaType=(AreaType)attr.getDomainResolvingAliases();
++						PrecisionDecimal maxOverlapValue=areaType.getMaxOverlap();
++						double maxOverlap=maxOverlapValue!=null?maxOverlapValue.doubleValue():0.0;
++						ItfAreaPolygon2Linetable allLines=new ItfAreaPolygon2Linetable(tableQName, recman, maxOverlap);
+ 						// FORALL main objects
+ 						java.util.Map<String, IomObject> pool=getObjectPool(tableQName);
+
+diff --git a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java b/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
+--- a/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
++++ b/src/main/java/ch/interlis/iom_j/itf/impl/ItfAreaPolygon2Linetable.java
+@@
+ 	private ObjectPoolManager recman=null;
+ 	private String iliqname=null;
++	private double maxOverlap=0.0;
++
+ 	public ItfAreaPolygon2Linetable(String iliqname1, ObjectPoolManager recman1){
++		this(iliqname1,recman1,0.0);
++	}
++
++	public ItfAreaPolygon2Linetable(String iliqname1, ObjectPoolManager recman1,double maxOverlap1){
+ 		lines=new FileBasedCollection<CompoundCurve>(recman1,this.getClass().getSimpleName(),new CompoundCurveSerializer());
+ 		polygons=new java.util.ArrayList<Polygon>();
+ 		recman=recman1;
+ 		iliqname=iliqname1;
++		maxOverlap=maxOverlap1;
+ 	}
+@@
+ 	public java.util.List<IomObject> getLines() throws IoxException {
+ 		if(ioxlines==null){
+ 			{
+ 				CompoundCurveNoder noder=new CompoundCurveNoder(recman,(java.util.List)lines,false);
+ 				noder.setEnableCommonSegments(true);
+-				if(!noder.isValid()){
+-					for(Intersection is:noder.getIntersections()){
++				List<Intersection> invalidIntersections=new ArrayList<Intersection>();
++				for(Intersection is:noder.getIntersections()){
++					if(isInvalidProperIntersection(is,maxOverlap)){
++						invalidIntersections.add(is);
++					}
++				}
++				if(!invalidIntersections.isEmpty()){
++					for(Intersection is:invalidIntersections){
+ 						EhiLogger.logError("intersection tid1 "+is.getCurve1().getUserData()+", tid2 "+is.getCurve2().getUserData()+", coord "+is.getPt()[0].toString()+(is.getPt().length==2?(", coord2 "+is.getPt()[1].toString()):""));
+ 						EhiLogger.traceState("overlap "+is.getOverlap()+", seg1 "+is.getSegment1()+", seg2 "+is.getSegment2());
+ 					}
+ 					throw new IoxException("intersections");
+ 				}
+@@
+ 		return (List<IomObject>) ioxlines;
+ 	}
++
++	/**
++	 * Same tolerance semantics as AreaValidator.isInvalidProperIntersection().
++	 */
++	private static boolean isInvalidProperIntersection(Intersection intersection,double maxOverlap){
++		if(intersection.isOverlay()){
++			return true;
++		}
++
++		Coordinate[] points=intersection.getPt();
++		CurveSegment segmentA=intersection.getSegment1();
++		CurveSegment segmentB=intersection.getSegment2();
++
++		if(points.length==2){
++			boolean p0AtControlPoints=isControlPoint(points[0],segmentA) && isControlPoint(points[0],segmentB);
++			boolean p1AtControlPoints=isControlPoint(points[1],segmentA) && isControlPoint(points[1],segmentB);
++
++			if(!p0AtControlPoints && !p1AtControlPoints){
++				return true;
++			}else if(p0AtControlPoints && p1AtControlPoints){
++				return false;
++			}else{
++				return intersection.getOverlap()!=null && intersection.getOverlap()>maxOverlap;
++			}
++		}else if(points.length==1){
++			return !(isControlPoint(points[0],segmentA) && isControlPoint(points[0],segmentB));
++		}
++
++		return true;
++	}
++
++	private static boolean isControlPoint(Coordinate point,CurveSegment segment){
++		return point.equals2D(segment.getStartPoint()) || point.equals2D(segment.getEndPoint());
++	}
